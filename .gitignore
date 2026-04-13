@@ -1,0 +1,12 @@
+.DS_Store
+*.log
+.env
+.env.local
+__pycache__/
+*.pyc
+.venv/
+node_modules/
+.claude/sessions/
+.opencode/sessions/
+dist/
+build/
