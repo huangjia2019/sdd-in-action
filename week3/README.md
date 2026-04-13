@@ -13,18 +13,22 @@
 Week 3 装 BMAD（Week 1 的 skill 和 Week 2 的 OpenSpec 继续保留）：
 
 ```bash
-cd your-project
-npx bmad-method install
-# 选 claude-code 或 opencode
-# 选 brownfield (老项目) 或 greenfield (新项目)
-
-# 验证
-ls .bmad-core/
-cat .bmad-core/core-config.yaml
+cd your-project && npx bmad-method install
 ```
 
-BMAD 不替代 OpenSpec。两者配合：
-- BMAD 管**视角**（多角色对同一问题 review）
-- OpenSpec 管**流程**（一个 change 从 proposal 到 archive）
+BMAD 不替代 OpenSpec。BMAD 管视角（多角色 review）· OpenSpec 管流程（change 生命周期）。
 
-常用组合：先 `/party pm architect qa` 吵共识 → 再 `/opsx:new` 把共识落成 change。
+## 📦 物料 · B 路参考答案
+
+> 怎么用？见 [Week 1 README](../week1/README.md#-这个目录里的文件怎么用)。**先自己跑，再对照，不 CV**。
+
+**specs/ · 4 份**
+
+- `multi-agent-patterns.md` · N9 · Supervisor vs Swarm vs Hierarchical 选型
+- `state-graph.md` · N10 · LangGraph 状态机 + failure transition
+- `planning-review.md` · N11 · Party Mode 共识 · 质量阈值功能
+- `observability.md` · N12 · 8 个必须暴露的 span
+
+**code/**
+
+- `workflow.py` · LangGraph Supervisor 模式骨架

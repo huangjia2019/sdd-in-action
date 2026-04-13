@@ -1,0 +1,29 @@
+# Spec: week4/specs/deploy.md · Week 4 · N16 · B 路 /dockerize 产出
+# 用法:
+#   cp .env.example .env          # 填入 SMTP / ANTHROPIC_API_KEY
+#   cp subscribers.yaml.example subscribers.yaml
+#   docker compose up -d
+#   docker compose logs -f daily-digest
+
+services:
+  daily-digest:
+    build: .
+    container_name: daily-digest
+    restart: unless-stopped
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      - FROM_EMAIL=${FROM_EMAIL}
+      - WEB_BASE_URL=${WEB_BASE_URL}
+    volumes:
+      - ./subscribers.yaml:/app/subscribers.yaml:ro
+      - ./knowledge:/app/knowledge:ro
+    # healthcheck · cron 进程存活
+    healthcheck:
+      test: ["CMD", "pgrep", "cron"]
+      interval: 1m
+      timeout: 10s
+      retries: 3

@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Analyzer Output",
+  "description": "Schema for knowledge/tagged/{date}.json · produced by analyzer agent",
+  "type": "object",
+  "required": ["date", "tagged_at", "items"],
+  "properties": {
+    "date":      {"type": "string", "format": "date"},
+    "tagged_at": {"type": "string", "format": "date-time"},
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["url", "labels", "confidence"],
+        "properties": {
+          "url":   {"type": "string", "format": "uri"},
+          "title": {"type": "string"},
+          "labels": {
+            "type": "object",
+            "required": ["tech_category", "innovation_level", "difficulty"],
+            "properties": {
+              "tech_category":    {"type": "string", "enum": ["llm", "agent", "rag", "multimodal", "infra", "other"]},
+              "innovation_level": {"type": "string", "enum": ["incremental", "notable", "breakthrough"]},
+              "difficulty":       {"type": "string", "enum": ["beginner", "intermediate", "advanced"]}
+            }
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "< 0.6 触发人工复核队列"
+          }
+        }
+      }
+    }
+  }
+}

@@ -10,24 +10,29 @@
 
 ## 工具
 
-Week 2 装 OpenSpec（Week 1 的三个 skill 继续保留）：
+Week 2 装 OpenSpec（Week 1 的 skill 保留）：
 
 ```bash
 npm install -g @fission-ai/openspec@latest
-openspec --version
-
-cd your-project
-openspec init
+cd your-project && openspec init
 ```
 
-OpenSpec 的 10 个命令里 · Week 2 用 7 个：
+Week 2 用到 7 个 `/opsx:*` 命令：`new · ff · apply · verify · sync · archive · onboard`。
 
-```
-/opsx:new <name>      创建新 change
-/opsx:ff              fast-forward 推进所有 artifact
-/opsx:apply           按 tasks.md 生成代码
-/opsx:verify          对照 spec 检查实现
-/opsx:sync            合并 delta 到主规范
-/opsx:archive         归档完成的 change
-/opsx:onboard <dir>   老项目增量接入
-```
+## 📦 物料 · B 路参考答案
+
+> 怎么用？见 [Week 1 README](../week1/README.md#-这个目录里的文件怎么用) 有完整说明。简而言之：**先自己跑，再对照，不是 CV**。
+
+**specs/ · 4 份 change 的 spec 部分**
+
+- `hook.md` · N5 · pre-commit schema 校验 hook
+- `pipeline.md` · N6 · 三 agent 串行流水线
+- `ci.md` · N7 · GitHub Actions daily-run
+- `cost-budget.md` · N8 · 成本治理（横切关注点）
+
+**code/ · 可运行示例**
+
+- `hook/pre-commit` · shell 脚本 · `chmod +x` 后放 `.git/hooks/`
+- `pipeline/pipeline.py` · Python 流水线 runner
+- `workflow/daily-run.yml` · GitHub Actions workflow
+- `cost/cost_tracker.py` · 成本追踪 + 自动降级

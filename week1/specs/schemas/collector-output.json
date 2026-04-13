@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Collector Output",
+  "description": "Schema for knowledge/raw/{date}.json · produced by collector agent",
+  "type": "object",
+  "required": ["date", "source", "items"],
+  "properties": {
+    "date": {
+      "type": "string",
+      "format": "date",
+      "description": "UTC 日期 · YYYY-MM-DD"
+    },
+    "source": {
+      "type": "string",
+      "enum": ["github-trending", "hacker-news", "arxiv"],
+      "description": "数据源"
+    },
+    "scraped_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "抓取完成时间戳 · ISO 8601"
+    },
+    "items": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "required": ["url", "title", "topics"],
+        "properties": {
+          "url":         {"type": "string", "format": "uri"},
+          "title":       {"type": "string", "maxLength": 200},
+          "description": {"type": "string", "maxLength": 500},
+          "stars":       {"type": "integer", "minimum": 0},
+          "topics":      {"type": "array", "items": {"type": "string"}},
+          "author":      {"type": "string"}
+        }
+      }
+    }
+  }
+}
