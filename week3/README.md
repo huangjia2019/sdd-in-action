@@ -1,4 +1,4 @@
-# Week 3 · 物料
+# Week 3
 
 ## 文章
 
@@ -17,18 +17,3 @@ cd your-project && npx bmad-method install
 ```
 
 BMAD 不替代 OpenSpec。BMAD 管视角（多角色 review）· OpenSpec 管流程（change 生命周期）。
-
-## 📦 物料 · B 路参考答案
-
-> 怎么用？见 [Week 1 README](../week1/README.md#-这个目录里的文件怎么用)。**先自己跑，再对照，不 CV**。
-
-**specs/ · 4 份**
-
-- `multi-agent-patterns.md` · N9 · Supervisor vs Swarm vs Hierarchical 选型
-- `state-graph.md` · N10 · LangGraph 状态机 + failure transition
-- `planning-review.md` · N11 · Party Mode 共识 · 质量阈值功能
-- `observability.md` · N12 · 8 个必须暴露的 span
-
-**code/**
-
-- `workflow.py` · LangGraph Supervisor 模式骨架
