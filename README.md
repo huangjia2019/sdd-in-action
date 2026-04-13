@@ -7,7 +7,7 @@
 - [Week 1 · SDD 基础 + grill-me 三件套](./week1/)
 - [Week 2 · OpenSpec 登场](./week2/)
 - [Week 3 · BMAD 多角色](./week3/)
-- Week 4 · Superpowers 完整方法论（即将更新）
+- [Week 4 · Superpowers 完整方法论](./week4/)
 
 ## 工具路线
 
