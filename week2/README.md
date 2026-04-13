@@ -16,9 +16,10 @@ Week 2 装 OpenSpec（Week 1 的 skill 保留）：
 npm install -g @fission-ai/openspec@latest
 cd your-project && openspec init
 
-# 关键 · 切到 expanded profile（默认 core 只有 4 条命令）
-openspec config profile expanded
+# 关键 · 启用 expanded 命令（默认 core 只有 4 条）
+# v1.3.0 暂无预设 · 直接改 ~/.config/openspec/config.json 的 workflows 数组：
+# ["propose","explore","apply","archive","new","continue","ff","verify","sync","bulk-archive","onboard"]
 openspec update
 ```
 
-切完重启 IDE。本周用到 7 个 `/opsx:*` 命令：`new · ff · apply · verify · sync · archive · onboard`（默认 core profile 只有 `propose · explore · apply · archive` 四条，不够用）。
+改完重启 IDE。本周用到 7 个 `/opsx:*` 命令：`new · ff · apply · verify · sync · archive · onboard`（默认 core 只有 `propose · explore · apply · archive` 四条，不够用）。
