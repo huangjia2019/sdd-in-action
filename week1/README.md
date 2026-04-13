@@ -1,12 +1,14 @@
 # Week 1 · 物料
 
-配套 [ai-knowledge-base/v1-skeleton](https://github.com/huangjia2019/ai-knowledge-base)。
-
 ## 文章
 
 - [SDD 的 95/5 原则](./advance/01-SDD的95-5原则.md)
 - [SDD 工具四层金字塔](./advance/02-四层金字塔.md)
 - [老项目逆向策略](./advance/03-老项目逆向策略.md)
+- [Spec 的粒度怎么把握](./advance/04-Spec的粒度怎么把握.md)
+- [AI 给的 spec 我该信多少](./advance/05-AI给的spec我该信多少.md)
+- [SDD 遇到紧急 bug 怎么办](./advance/06-SDD遇到紧急bug怎么办.md)
+- [团队里只有我想用 SDD 怎么办](./advance/07-团队里只有我想用SDD怎么办.md)
 
 ## 工具
 
