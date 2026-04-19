@@ -1,6 +1,6 @@
 ## Context
 
-This is the first change in Week 2 that **builds on** Week 1 artifacts rather than introducing a new concept from scratch. The pipeline is a thin orchestrator — all the real work lives in the three agents that Week 1 already defined. The challenge is respecting the inter-agent contract (`week1/specs/agents-collaboration.md`) without re-implementing it or silently drifting from it.
+This is the first change in Week 2 that **builds on** Week 1 artifacts rather than introducing a new concept from scratch. The pipeline is a thin orchestrator — all the real work lives in the three agents that Week 1 already defined. The challenge is respecting the inter-agent contract (`week1/specs/agents-prd.md`) without re-implementing it or silently drifting from it.
 
 Concretely, Week 1 agents communicate via:
 - **Data contract**: JSON files at fixed paths (`knowledge/raw/{date}.json`, `knowledge/tagged/{date}.json`, `knowledge/articles/{date}.md`)

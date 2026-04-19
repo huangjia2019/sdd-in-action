@@ -5,7 +5,7 @@ Week 1 delivered three agents (collector, analyzer, organizer) that are triggere
 ## What Changes
 
 - Add a `pipeline` CLI entry point: `python -m pipeline run --date YYYY-MM-DD`
-- Wire `collector → analyzer → organizer` via file-based handoffs using the Week 1 `agents-collaboration` contract
+- Wire `collector → analyzer → organizer` via file-based handoffs using the Week 1 `agents-prd` contract
 - Respect the trigger contract: each stage writes a `{date}.{stage}.done` marker; downstream stage starts only when its upstream marker exists
 - Emit a single `pipeline.log` per run with per-stage duration and exit code
 - Surface failures early: if any stage fails, stop the pipeline and write `knowledge/incidents/{date}.md` per the Week 1 `project-vision` contract
@@ -19,7 +19,7 @@ Week 1 delivered three agents (collector, analyzer, organizer) that are triggere
 ## Impact
 
 - **Code added**: `week2/code/pipeline/` (CLI entry + runner module)
-- **Depends on (unchanged)**: `week1/specs/agents-collaboration.md` (data contract + trigger contract)
+- **Depends on (unchanged)**: `week1/specs/agents-prd.md` (data contract + trigger contract)
 - **Reuses (unchanged)**: Week 1 agent implementations at `week1/code/04/skills/`
 - **New dependency**: none beyond Python stdlib (`argparse`, `subprocess`, `pathlib`)
 - **Developer workflow**: `python -m pipeline run --date 2026-04-15` replaces three manual Claude Code sessions

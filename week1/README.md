@@ -17,12 +17,12 @@ Week 1 装 3 个开源 skill（来自 [mattpocock/skills](https://github.com/mat
 ```bash
 # Claude Code
 npx skills@latest add mattpocock/skills/grill-me        -a claude-code
-npx skills@latest add mattpocock/skills/prd-to-plan     -a claude-code
+npx skills@latest add mattpocock/skills/to-issues        -a claude-code
 npx skills@latest add mattpocock/skills/write-a-skill   -a claude-code
 
 # OpenCode
 npx skills@latest add mattpocock/skills/grill-me        -a opencode
-npx skills@latest add mattpocock/skills/prd-to-plan     -a opencode
+npx skills@latest add mattpocock/skills/to-issues        -a opencode
 npx skills@latest add mattpocock/skills/write-a-skill   -a opencode
 ```
 

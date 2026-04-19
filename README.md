@@ -13,7 +13,7 @@
 
 | 周 | 引入工具 | 开源许可 |
 |----|---------|---------|
-| W1 | [grill-me / prd-to-plan / write-a-skill](https://github.com/mattpocock/skills) | MIT |
+| W1 | [grill-me / to-issues / write-a-skill](https://github.com/mattpocock/skills) | MIT |
 | W2 | [OpenSpec](https://github.com/Fission-AI/OpenSpec) | Apache 2.0 |
 | W3 | [BMAD](https://github.com/bmad-code-org/BMAD-METHOD) | MIT |
 | W4 | [Superpowers](https://github.com/obra/superpowers) | MIT |

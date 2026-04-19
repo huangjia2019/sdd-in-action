@@ -14,7 +14,7 @@
 
 - [ ] 3.1 Implement `runner.run(date)` that sequentially invokes collector → analyzer → organizer
 - [ ] 3.2 Each stage launches via `subprocess.run` with cwd at project root and a minimal copied env
-- [ ] 3.3 After each stage, check the expected `.done` marker path from `week1/specs/agents-collaboration.md`
+- [ ] 3.3 After each stage, check the expected `.done` marker path from `week1/specs/agents-prd.md`
 - [ ] 3.4 If marker missing, treat as failure even when subprocess exited 0 (defensive)
 - [ ] 3.5 If marker already exists at stage start, log skip and move on
 
@@ -43,4 +43,4 @@
 ## 7. Documentation
 
 - [ ] 7.1 Add a "Run the pipeline" section to `week2/README.md` linking this change
-- [ ] 7.2 Record in `week2/code/pipeline/README.md` that this pipeline depends on the Week 1 `agents-collaboration` contract and will break if that contract is modified without a coordinated change
+- [ ] 7.2 Record in `week2/code/pipeline/README.md` that this pipeline depends on the Week 1 `agents-prd` contract and will break if that contract is modified without a coordinated change

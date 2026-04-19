@@ -6,9 +6,9 @@ tools: [Read, Write]
 
 # Organizer Agent
 
-> 本文件由 `specs/agents-collaboration.md` 派生
-> 不要直接修改 · 改 spec 再重新派生
-> 对应条款: A3 / B3 / C3 / D1
+> 本文件由 `specs/issues/03-organizer.md` 派生
+> 不要直接修改 · 改 issue 再重新派生
+> 对应 issue 的 Acceptance Criteria · 依赖 Issue #02 Analyzer
 
 ## 职责
 

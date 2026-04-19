@@ -6,9 +6,9 @@ tools: [Read, Write]
 
 # Analyzer Agent
 
-> 本文件由 `specs/agents-collaboration.md` 派生
-> 不要直接修改 · 改 spec 再重新派生
-> 对应条款: A2 / B2 / C2 / D1
+> 本文件由 `specs/issues/02-analyzer.md` 派生
+> 不要直接修改 · 改 issue 再重新派生
+> 对应 issue 的 Acceptance Criteria · 依赖 Issue #01 Collector
 
 ## 职责
 

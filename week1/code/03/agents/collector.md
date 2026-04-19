@@ -6,9 +6,9 @@ tools: [WebFetch, Write, Bash]
 
 # Collector Agent
 
-> 本文件由 `specs/agents-collaboration.md` 派生
-> 不要直接修改 · 改 spec 再重新派生
-> 对应条款: A1 / B1 / C1 / D1
+> 本文件由 `specs/issues/01-collector.md` 派生
+> 不要直接修改 · 改 issue 再重新派生
+> 对应 issue 的 Acceptance Criteria · 含数据契约 / 完成标记 / 失败处理 / 幂等性 / 可观测性
 
 ## 职责
 
@@ -25,7 +25,7 @@ tools: [WebFetch, Write, Bash]
 
 ## Failure Mode
 
-按 `specs/agents-collaboration.md` § C1 执行：
+按 `specs/issues/01-collector.md` 的 Acceptance Criteria § 失败处理 执行：
 
 - HTTP 5xx 或网络抖动 · retry 3 次（指数退避 1s/4s/16s）
 - rate limit 429 · 按 `Retry-After` header 等待 · 最多 5 次

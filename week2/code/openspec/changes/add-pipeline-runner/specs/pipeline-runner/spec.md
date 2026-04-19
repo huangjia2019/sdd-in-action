@@ -11,7 +11,7 @@ The pipeline SHALL expose a CLI entry point `python -m pipeline run --date <YYYY
 
 ### Requirement: Contract-Respecting Handoff
 
-The pipeline SHALL invoke each downstream stage only after the upstream stage's `.done` marker exists at the path declared by `week1/specs/agents-collaboration.md`.
+The pipeline SHALL invoke each downstream stage only after the upstream stage's `.done` marker exists at the path declared by `week1/specs/agents-prd.md`.
 
 #### Scenario: Analyzer waits for collector marker
 
