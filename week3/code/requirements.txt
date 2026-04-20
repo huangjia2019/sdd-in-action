@@ -1,0 +1,15 @@
+# AI 知识库 V3 — 依赖清单
+
+# LangGraph 工作流引擎
+langgraph>=0.2.0
+langchain-core>=0.3.0
+
+# LLM 客户端
+openai>=1.0.0
+
+# 测试
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+
+# 工具
+python-dotenv>=1.0.0
