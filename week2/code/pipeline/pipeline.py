@@ -1,205 +1,214 @@
-"""Pipeline runner · Week 2 · N6 · B 路 /opsx:apply 产出
-对应 spec: week2/specs/pipeline.md
-
-这是学员参考版 · 生产使用前请根据你项目调整:
-- import 路径（Agent 实现位置）
-- LOG_DIR / STATUS_DIR 常量
-- 通知渠道（默认 stdout · 生产可接 Slack）
 """
+pipeline/pipeline.py · 四步流水线（基线版本 · 无 retry）
+
+Step 1: collect · 从 GitHub Trending 采集
+Step 2: analyze · LLM 逐条分析
+Step 3: organize · 去重 + 格式化
+Step 4: save · 写入 knowledge/articles/
+
+⚠️ 已知问题 · Step 2 调 LLM 时瞬时故障（timeout / rate limit / 5xx）会**直接崩溃**:
+- 当前代码没有 retry · 第 N 条挂掉整个 pipeline 就没了
+- 前 N-1 条的 token 成本沉没 · 当天知识库空
+- 修复方法 · Week 2 的 OpenSpec 实操 · 走一个 add-analyzer-retry-policy change
+
+运行方式:
+    python3 -m pipeline.pipeline --limit 20
+"""
+
 from __future__ import annotations
+
 import argparse
 import json
 import logging
+import os
 import sys
-import time
-from dataclasses import dataclass, field
+import urllib.parse
+import urllib.request
 from datetime import datetime, timezone
-from enum import Enum
 from pathlib import Path
-from typing import Callable
+
+from pipeline.model_client import chat, estimate_cost
+
+logger = logging.getLogger(__name__)
+
+# ── 目录 ──────────────────────────────────────────────────────
+BASE = Path(__file__).parent.parent
+RAW_DIR = BASE / "knowledge" / "raw"
+ARTICLES_DIR = BASE / "knowledge" / "articles"
 
 
-# ─── 常量 · 按你项目改 ─────────────────────────────────────────
-BASE = Path(__file__).parent.parent  # 默认 repo root
-RAW_DIR     = BASE / "knowledge" / "raw"
-TAGGED_DIR  = BASE / "knowledge" / "tagged"
-ARTICLE_DIR = BASE / "knowledge" / "articles"
-LOG_DIR     = BASE / "knowledge" / "logs"
-STATUS_DIR  = BASE / "knowledge" / "status"
-INCIDENT_DIR = BASE / "knowledge" / "incidents"
-
-
-# ─── 错误分类（按 spec § 失败分类） ────────────────────────────
-class ErrorCategory(Enum):
-    NETWORK   = "network"     # retry 3 · 指数退避
-    RATE      = "rate_limit"  # retry 5 · 等 Retry-After
-    AUTH      = "auth"        # 不 retry · 告警
-    FORMAT    = "format"      # retry 1 · 再错继续
-    UNKNOWN   = "unknown"
-
-
-def classify(exc: Exception) -> ErrorCategory:
-    msg = str(exc).lower()
-    if "429" in msg or "rate" in msg:    return ErrorCategory.RATE
-    if "401" in msg or "403" in msg:     return ErrorCategory.AUTH
-    if "5" in msg[:3] and "HTTPError" in type(exc).__name__:
-        return ErrorCategory.NETWORK
-    if isinstance(exc, (json.JSONDecodeError, ValueError)):
-        return ErrorCategory.FORMAT
-    return ErrorCategory.UNKNOWN
-
-
-# ─── Retry 策略 ───────────────────────────────────────────────
-def retry_policy(cat: ErrorCategory) -> tuple[int, Callable[[int], float]]:
-    """返回 (max_retries, delay_fn)"""
-    if cat == ErrorCategory.NETWORK:
-        return 3, lambda n: 1 * (4 ** n)       # 1s, 4s, 16s
-    if cat == ErrorCategory.RATE:
-        return 5, lambda n: 10 * (n + 1)        # 读 Retry-After 更好 · 此处简化
-    if cat == ErrorCategory.FORMAT:
-        return 1, lambda n: 0
-    return 0, lambda n: 0                        # AUTH / UNKNOWN 不 retry
-
-
-@dataclass
-class AgentResult:
-    success: bool
-    item_count: int = 0
-    error_category: ErrorCategory | None = None
-    error_msg: str = ""
-    duration_sec: float = 0.0
-
-
-def run_agent_with_retry(name: str, fn: Callable[[], int], log: logging.Logger) -> AgentResult:
-    """通用 retry 包装器。fn 返回处理条目数。"""
-    attempt = 0
-    while True:
-        start = time.time()
-        try:
-            n = fn()
-            return AgentResult(success=True, item_count=n, duration_sec=time.time() - start)
-        except Exception as e:
-            cat = classify(e)
-            log.warning(f"[{name}] attempt {attempt + 1} failed · {cat.value} · {e}")
-            max_r, delay = retry_policy(cat)
-            if attempt >= max_r:
-                log.error(f"[{name}] gave up after {attempt + 1} attempts")
-                return AgentResult(
-                    success=False, error_category=cat,
-                    error_msg=str(e), duration_sec=time.time() - start,
-                )
-            time.sleep(delay(attempt))
-            attempt += 1
-
-
-# ─── 幂等检查 ────────────────────────────────────────────────
-def done_path(agent: str, date: str) -> Path:
-    return RAW_DIR / f"{date}.{agent}.done"
-
-
-def is_done(agent: str, date: str) -> bool:
-    return done_path(agent, date).exists()
-
-
-def mark_done(agent: str, date: str):
-    done_path(agent, date).touch()
-
-
-def mark_failed(agent: str, date: str):
-    (RAW_DIR / f"{date}.{agent}.failed").touch()
-
-
-# ─── 主流程 ─────────────────────────────────────────────────
-def run_pipeline(date: str, force: bool = False, skip_to: str | None = None, log: logging.Logger = None) -> int:
-    stages = [
-        ("collector", run_collector),
-        ("analyzer",  run_analyzer),
-        ("organizer", run_organizer),
-    ]
-    start_idx = 0
-    if skip_to:
-        start_idx = next(i for i, (n, _) in enumerate(stages) if n == skip_to)
-
-    any_failed = False
-    for name, fn in stages[start_idx:]:
-        if is_done(name, date) and not force:
-            log.info(f"[{name}] skip · .done exists (use --force to rerun)")
-            continue
-        log.info(f"[{name}] start")
-        r = run_agent_with_retry(name, lambda: fn(date), log)
-        if r.success:
-            mark_done(name, date)
-            log.info(f"[{name}] ok · {r.item_count} items · {r.duration_sec:.1f}s")
-        else:
-            mark_failed(name, date)
-            log.error(f"[{name}] FAILED · {r.error_category.value if r.error_category else 'unknown'}")
-            write_incident(date, name, r)
-            any_failed = True
-            break  # 上游失败不触发下游 · 按 spec § B4
-
-    write_status(date, stages, start_idx)
-    return 1 if any_failed else 0
-
-
-# ─── Agent 实现占位 · 实际需导入真实 Agent 模块 ─────────────────
-def run_collector(date: str) -> int:
-    # TODO: from agents.collector import run; return run(date)
-    raise NotImplementedError("connect your collector here")
-
-
-def run_analyzer(date: str) -> int:
-    raise NotImplementedError("connect your analyzer here")
-
-
-def run_organizer(date: str) -> int:
-    raise NotImplementedError("connect your organizer here")
-
-
-def write_incident(date: str, agent: str, r: AgentResult):
-    INCIDENT_DIR.mkdir(parents=True, exist_ok=True)
-    p = INCIDENT_DIR / f"{date}.md"
-    with p.open("a") as f:
-        f.write(f"\n## {agent} failure · {datetime.now(timezone.utc).isoformat()}\n\n")
-        f.write(f"- category: {r.error_category.value if r.error_category else 'unknown'}\n")
-        f.write(f"- msg: {r.error_msg}\n")
-        f.write(f"- duration: {r.duration_sec:.1f}s\n")
-
-
-def write_status(date: str, stages, start_idx):
-    STATUS_DIR.mkdir(parents=True, exist_ok=True)
-    p = STATUS_DIR / f"{date}.md"
-    lines = [f"# {date} · pipeline status\n"]
-    for i, (name, _) in enumerate(stages):
-        if i < start_idx:
-            lines.append(f"- {name} · ⏭ skipped (--skip-to)")
-        elif is_done(name, date):
-            lines.append(f"- {name} · ✓ done")
-        elif (RAW_DIR / f"{date}.{name}.failed").exists():
-            lines.append(f"- {name} · ✗ failed · see incidents/{date}.md")
-        else:
-            lines.append(f"- {name} · ⊘ not run")
-    p.write_text("\n".join(lines) + "\n")
-
-
-# ─── CLI ─────────────────────────────────────────────────────
-def main():
-    p = argparse.ArgumentParser()
-    p.add_argument("--date", default=datetime.now(timezone.utc).strftime("%Y-%m-%d"))
-    p.add_argument("--force", action="store_true")
-    p.add_argument("--skip-to", choices=["collector", "analyzer", "organizer"])
-    args = p.parse_args()
-
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(message)s",
-        handlers=[
-            logging.FileHandler(LOG_DIR / f"{args.date}.log"),
-            logging.StreamHandler(sys.stdout),
-        ],
+# ── Step 1: 采集 ──────────────────────────────────────────────
+def step_collect(limit: int = 20) -> list[dict]:
+    """从 GitHub Search API 抓 AI/Agent 相关热门项目"""
+    one_week_ago = (
+        datetime.now(timezone.utc) - __import__("datetime").timedelta(days=7)
+    ).strftime("%Y-%m-%d")
+    query = f"ai agent llm stars:>100 pushed:>{one_week_ago}"
+    url = (
+        f"https://api.github.com/search/repositories?q={urllib.parse.quote(query)}"
+        f"&sort=stars&per_page={limit}"
     )
-    log = logging.getLogger("pipeline")
-    sys.exit(run_pipeline(args.date, args.force, args.skip_to, log))
+
+    headers = {"Accept": "application/vnd.github.v3+json"}
+    token = os.getenv("GITHUB_TOKEN", "")
+    if token:
+        headers["Authorization"] = f"token {token}"
+
+    req = urllib.request.Request(url, headers=headers)
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        data = json.loads(resp.read().decode())
+
+    items = []
+    for repo in data.get("items", []):
+        items.append({
+            "source": "github",
+            "title": repo["full_name"],
+            "url": repo["html_url"],
+            "description": repo.get("description", "") or "",
+            "stars": repo.get("stargazers_count", 0),
+            "collected_at": datetime.now(timezone.utc).isoformat(),
+        })
+
+    RAW_DIR.mkdir(parents=True, exist_ok=True)
+    today = datetime.now().strftime("%Y-%m-%d")
+    with open(RAW_DIR / f"github-{today}.json", "w", encoding="utf-8") as f:
+        json.dump(items, f, ensure_ascii=False, indent=2)
+
+    print(f"[Collect] {len(items)} 条 · 保存到 knowledge/raw/github-{today}.json")
+    return items
+
+
+# ── Step 2: 分析 ──────────────────────────────────────────────
+def step_analyze(items: list[dict]) -> list[dict]:
+    """逐条 LLM 分析 · ⚠️ 无 retry · 第一个瞬时故障就整体 crash"""
+    analyzed: list[dict] = []
+    total_cost = 0.0
+
+    for i, item in enumerate(items, 1):
+        prompt = f"""请分析以下技术项目，用 JSON 格式返回：
+
+项目: {item['title']}
+描述: {item.get('description', '')}
+URL: {item.get('url', '')}
+
+返回格式：
+{{
+    "summary": "200字以内中文摘要",
+    "tags": ["标签1","标签2","标签3"],
+    "relevance_score": 0.85,
+    "category": "llm / agent / rag / framework / tool",
+    "key_insight": "一句话洞察"
+}}"""
+
+        # ⚠️ 这里调 chat 会抛异常 · 没有 retry · 直接 propagate
+        #    pipeline 会在第 i 条挂掉 · 前 i-1 条的成本沉没
+        response = chat(prompt)
+        total_cost += estimate_cost(response.prompt_tokens, response.completion_tokens)
+
+        try:
+            # 解析 LLM 返回的 JSON · 去掉 markdown 包裹
+            text = response.content.strip()
+            if text.startswith("```"):
+                text = "\n".join(text.split("\n")[1:-1])
+            analysis = json.loads(text)
+            analyzed.append({
+                **item,
+                **analysis,
+                "status": "ok",
+                "analyzed_at": datetime.now(timezone.utc).isoformat(),
+            })
+            print(f"[Analyze] {i}/{len(items)} · {item['title']}")
+        except json.JSONDecodeError as e:
+            # 内容层错误 · 降级默认值（但不 retry · 重试也是坏 JSON）
+            logger.warning("分析结果解析失败: %s - %s", item['title'], e)
+            analyzed.append({
+                **item,
+                "summary": item.get("description", "")[:200],
+                "tags": ["unknown"],
+                "relevance_score": 0.5,
+                "category": "unknown",
+                "key_insight": "",
+                "status": "parse_failed",
+                "analyzed_at": datetime.now(timezone.utc).isoformat(),
+            })
+
+    print(f"[Analyze] 完成 {len(analyzed)} 条 · 成本 ¥{total_cost:.4f}")
+    return analyzed
+
+
+# ── Step 3: 整理 ──────────────────────────────────────────────
+def step_organize(items: list[dict], min_score: float = 0.6) -> list[dict]:
+    """按 relevance_score 过滤 + URL 去重 + 标准格式"""
+    # 去重
+    seen: set[str] = set()
+    unique: list[dict] = []
+    for item in items:
+        if item.get("relevance_score", 0) < min_score:
+            continue
+        url = item.get("url", "")
+        if url in seen:
+            continue
+        seen.add(url)
+        unique.append(item)
+
+    # 标准化
+    articles: list[dict] = []
+    today = datetime.now().strftime("%Y-%m-%d")
+    for i, item in enumerate(unique):
+        articles.append({
+            "id": f"{today}-{i:03d}",
+            "title": item["title"],
+            "url": item["url"],
+            "source": item.get("source", "github"),
+            "summary": item["summary"],
+            "tags": item["tags"],
+            "relevance_score": item["relevance_score"],
+            "category": item["category"],
+            "key_insight": item.get("key_insight", ""),
+            "collected_at": item["collected_at"],
+            "analyzed_at": item.get("analyzed_at", ""),
+        })
+
+    print(f"[Organize] 过滤 + 去重后 {len(articles)} 条")
+    return articles
+
+
+# ── Step 4: 保存 ──────────────────────────────────────────────
+def step_save(articles: list[dict]) -> None:
+    """写入 knowledge/articles/ + 更新 index.json"""
+    ARTICLES_DIR.mkdir(parents=True, exist_ok=True)
+    for article in articles:
+        with open(ARTICLES_DIR / f"{article['id']}.json", "w", encoding="utf-8") as f:
+            json.dump(article, f, ensure_ascii=False, indent=2)
+
+    # 更新 index
+    index_path = ARTICLES_DIR / "index.json"
+    index = json.load(open(index_path, encoding="utf-8")) if index_path.exists() else []
+    existing_ids = {e["id"] for e in index}
+    for a in articles:
+        if a["id"] not in existing_ids:
+            index.append({"id": a["id"], "title": a["title"], "category": a["category"]})
+    with open(index_path, "w", encoding="utf-8") as f:
+        json.dump(index, f, ensure_ascii=False, indent=2)
+
+    print(f"[Save] 写入 {len(articles)} 条 → {ARTICLES_DIR}")
+
+
+# ── 主流程 ────────────────────────────────────────────────────
+def main():
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
+    parser = argparse.ArgumentParser(description="四步知识库流水线（基线版 · 无 retry）")
+    parser.add_argument("--limit", type=int, default=20, help="采集上限")
+    parser.add_argument("--min-score", type=float, default=0.6, help="相关性阈值")
+    args = parser.parse_args()
+
+    items = step_collect(limit=args.limit)
+    analyzed = step_analyze(items)            # ← 这里会因为瞬时故障 crash
+    articles = step_organize(analyzed, min_score=args.min_score)
+    step_save(articles)
+
+    print("\n✅ 流水线完成")
 
 
 if __name__ == "__main__":
