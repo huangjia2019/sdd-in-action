@@ -28,21 +28,49 @@ Each invocation of `chat()` SHALL have independent retry state with no shared at
 - **WHEN** `step_analyze` processes multiple items in sequence
 - **THEN** each item's retry budget SHALL be independent and reset for each item
 
+#### Scenario: Sequential processing (concurrency disabled)
+- **WHEN** `step_analyze` processes items
+- **THEN** items SHALL be processed one at a time with no parallelism
+- **AND** `step_analyze` SHALL NOT introduce concurrent chat() calls
+
 ### Requirement: Cost Tracking for All Attempts
 
-The system SHALL track costs for every `chat()` call attempt, including failed retries.
+The system SHALL track costs for every `chat()` call attempt (first and retry), estimated from the request payload.
 
 #### Scenario: Successful call records actual cost
 - **WHEN** `chat()` succeeds on attempt N
 - **THEN** the cost SHALL be calculated from `response.usage.prompt_tokens` and `response.usage.completion_tokens`
 
-#### Scenario: Failed retry attempt records zero cost
-- **WHEN** `chat()` fails on a retry attempt
-- **THEN** the cost SHALL be recorded as 0.0
+#### Scenario: Successful call without usage data falls back to request estimation
+- **WHEN** `chat()` succeeds but `response.usage` is `None` or missing
+- **THEN** the cost SHALL be estimated from the request payload token count
+- **AND** a warning SHALL be logged
 
-#### Scenario: Degraded item excluded from articles
+#### Scenario: Every attempt records cost
+- **WHEN** `chat()` makes any call attempt (first or retry)
+- **THEN** the cost SHALL be estimated from request tokens and recorded via `cost_tracker`
+- **NOTE**: If the call fails before a response is received, the cost SHALL still be estimated from the request payload and recorded as the best effort
+
+#### Scenario: Degraded item flows through pipeline but excluded from articles
 - **WHEN** `step_organize` processes items
 - **THEN** items with `status: "degraded"` SHALL be excluded from the output articles
+- **AND** degraded items SHALL NOT cause pipeline abort — processing SHALL continue for remaining items
+
+### Requirement: Observability for Retry Operations
+
+The retry decorator SHALL emit structured log messages for all significant retry events.
+
+#### Scenario: Retry attempt logged
+- **WHEN** a retry is triggered after a transient exception
+- **THEN** a log message SHALL be emitted at WARNING level containing: attempt number, exception type, and delay before next attempt
+
+#### Scenario: All retries exhausted logged
+- **WHEN** all retry attempts are exhausted
+- **THEN** a log message SHALL be emitted at ERROR level containing: item identifier, exception type, and total attempts made
+
+#### Scenario: Degraded item logged
+- **WHEN** an item is marked as degraded
+- **THEN** a log message SHALL be emitted at ERROR level containing: item identifier and reason
 
 ### Requirement: Retry Configuration Parameters
 
@@ -54,4 +82,4 @@ The `with_retry` decorator SHALL accept the following configuration:
 
 #### Scenario: Jitter applied to each delay
 - **WHEN** a retry delay is calculated
-- **THEN** a random jitter of `uniform(-jitter, jitter)` SHALL be added to the base delay
+- **THEN** a random jitter of `uniform(0, jitter)` SHALL be added to the base delay
