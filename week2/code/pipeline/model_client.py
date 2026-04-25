@@ -6,18 +6,40 @@ pipeline/model_client.py · 统一 LLM 调用接口
     LLM_BASE_URL=https://api.deepseek.com
     LLM_MODEL=deepseek-chat
 
-注意 · 本文件不做任何 retry · 瞬时故障（timeout / rate limit）会直接向上抛。
-Week 2 的 OpenSpec 实操就是要在这一层上加 retry 机制。
+Week 2: 本文件实现了 with_retry 装饰器，对 transient 故障进行指数退避重试。
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import os
+import random
+import time
 from dataclasses import dataclass
+from functools import wraps
 
 from dotenv import load_dotenv
+from openai import APITimeoutError, RateLimitError, APIStatusError, APIConnectionError
 from openai import OpenAI
+import httpx
+
+logger = logging.getLogger(__name__)
+
+TRANSIENT_EXCEPTIONS = (
+    APITimeoutError,
+    APIConnectionError,
+    RateLimitError,
+    APIStatusError,
+    httpx.TimeoutException,
+    httpx.ConnectError,
+)
+
+CONTENT_EXCEPTIONS = (
+    json.JSONDecodeError,
+    KeyError,
+    ValueError,
+)
 
 load_dotenv()
 
@@ -38,18 +60,57 @@ def get_client() -> OpenAI:
     )
 
 
+def with_retry(
+    max_retries: int = 3,
+    base_delay: float = 1.0,
+    max_delay: float = 20.0,
+    jitter: float = 0.5,
+    retry_on: tuple[type[Exception], ...] = TRANSIENT_EXCEPTIONS,
+):
+    """指数退避重试装饰器"""
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            attempt = 0
+            delay = base_delay
+            while True:
+                try:
+                    result = fn(*args, **kwargs)
+                    if attempt > 0:
+                        logger.info(
+                            "[retry] success attempt=%d/%d prompt_tokens=%d completion_tokens=%d cost=¥%.6f",
+                            attempt, max_retries, result.prompt_tokens, result.completion_tokens,
+                            estimate_cost(result.prompt_tokens, result.completion_tokens)
+                        )
+                    return result
+                except CONTENT_EXCEPTIONS:
+                    raise
+                except retry_on as e:
+                    attempt += 1
+                    if attempt > max_retries:
+                        logger.error(
+                            "[retry] exhausted %d attempts, last exception: %s",
+                            max_retries, e.__class__.__name__
+                        )
+                        raise
+                    if isinstance(e, APIStatusError) and e.status_code < 500:
+                        raise
+                    jitter_amount = random.uniform(0, jitter)
+                    sleep_time = delay + jitter_amount
+                    logger.warning(
+                        "[retry] attempt=%d/%d delay=%.2fs exception=%s",
+                        attempt, max_retries, sleep_time, e.__class__.__name__
+                    )
+                    time.sleep(sleep_time)
+                    delay = min(delay * 2, max_delay)
+        return wrapper
+    return decorator
+
+
+@with_retry(max_retries=3, base_delay=1.0, max_delay=20.0, jitter=0.5)
 def chat(prompt: str, system: str = "你是一个专业的技术分析师。",
          temperature: float = 0.3, max_tokens: int = 2000) -> ChatResponse:
-    """调用 LLM · 返回 ChatResponse
-
-    ⚠️ 不做 retry · 瞬时故障直接抛:
-        - APITimeoutError · 超时
-        - RateLimitError · 429
-        - APIConnectionError · 网络断
-        - APIStatusError · 5xx
-
-    Week 2 /opsx:apply 会给本文件加一个 with_retry 装饰器。
-    """
+    """调用 LLM · 返回 ChatResponse"""
     client = get_client()
     model = os.getenv("LLM_MODEL", "deepseek-chat")
 

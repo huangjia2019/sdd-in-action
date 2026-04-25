@@ -21,10 +21,10 @@
 8. 成功后日志含 prompt_tokens / completion_tokens / cost
 
 **验收**:
-- [ ] `openai` 库抛 APITimeoutError 时，chat() 自动重试直到耗尽
-- [ ] 抛 json.JSONDecodeError 时不重试，直接 raise
-- [ ] 每个 chat() 调用独立 retry 状态，互不影响
-- [ ] 日志完整覆盖每次 attempt
+- [x] `openai` 库抛 APITimeoutError 时，chat() 自动重试直到耗尽
+- [x] 抛 json.JSONDecodeError 时不重试，直接 raise
+- [x] 每个 chat() 调用独立 retry 状态，互不影响
+- [x] 日志完整覆盖每次 attempt
 
 ---
 
@@ -38,9 +38,9 @@
 3. `step_organize()` 的 `for item in items:` 循环开头加 `if item.get("status") == "degraded": continue`
 
 **验收**:
-- [ ] 第 N 条 transient 失败后，step_analyze 继续处理第 N+1 条
-- [ ] degraded item 的 status == "degraded"，summary == description[:200]
-- [ ] degraded item 不出现在 step_organize 输出里
+- [x] 第 N 条 transient 失败后，step_analyze 继续处理第 N+1 条
+- [x] degraded item 的 status == "degraded"，summary == description[:200]
+- [x] degraded item 不出现在 step_organize 输出里
 
 ---
 
@@ -58,8 +58,8 @@
 3. 验证 cost_logger 记录了每次 attempt
 
 **验收**:
-- [ ] 4 条测试路径全部通过
-- [ ] pytest 运行无 warning
+- [x] 4 条测试路径全部通过
+- [x] pytest 运行无 warning
 
 ---
 
@@ -73,5 +73,5 @@
 5. 确认 `knowledge/raw/` 仍保留原始采集数据
 
 **验收**:
-- [ ] pipeline 完整跑完，输出含 token cost
-- [ ] 无 Python 异常中断
+- [x] pipeline 完整跑完，输出含 token cost
+- [x] 无 Python 异常中断
