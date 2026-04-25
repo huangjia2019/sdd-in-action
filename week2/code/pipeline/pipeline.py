@@ -27,7 +27,7 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-from pipeline.model_client import chat, estimate_cost
+from pipeline.model_client import chat, estimate_cost, TRANSIENT_EXCEPTIONS, CONTENT_EXCEPTIONS
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +80,7 @@ def step_collect(limit: int = 20) -> list[dict]:
 
 # ── Step 2: 分析 ──────────────────────────────────────────────
 def step_analyze(items: list[dict]) -> list[dict]:
-    """逐条 LLM 分析 · ⚠️ 无 retry · 第一个瞬时故障就整体 crash"""
+    """逐条 LLM 分析 · transient 故障走 degraded continue"""
     analyzed: list[dict] = []
     total_cost = 0.0
 
@@ -100,13 +100,10 @@ URL: {item.get('url', '')}
     "key_insight": "一句话洞察"
 }}"""
 
-        # ⚠️ 这里调 chat 会抛异常 · 没有 retry · 直接 propagate
-        #    pipeline 会在第 i 条挂掉 · 前 i-1 条的成本沉没
-        response = chat(prompt)
-        total_cost += estimate_cost(response.prompt_tokens, response.completion_tokens)
-
         try:
-            # 解析 LLM 返回的 JSON · 去掉 markdown 包裹
+            response = chat(prompt)
+            total_cost += estimate_cost(response.prompt_tokens, response.completion_tokens)
+
             text = response.content.strip()
             if text.startswith("```"):
                 text = "\n".join(text.split("\n")[1:-1])
@@ -118,9 +115,23 @@ URL: {item.get('url', '')}
                 "analyzed_at": datetime.now(timezone.utc).isoformat(),
             })
             print(f"[Analyze] {i}/{len(items)} · {item['title']}")
-        except json.JSONDecodeError as e:
-            # 内容层错误 · 降级默认值（但不 retry · 重试也是坏 JSON）
-            logger.warning("分析结果解析失败: %s - %s", item['title'], e)
+        except TRANSIENT_EXCEPTIONS as e:
+            logger.error("[degraded] %s failed after retries: %s", item['title'], e)
+            degraded_item = {
+                **item,
+                "status": "degraded",
+                "summary": item.get("description", "")[:200],
+                "tags": ["unknown"],
+                "relevance_score": 0.5,
+                "category": "unknown",
+                "key_insight": "",
+                "degraded_reason": f"{e.__class__.__name__}: {str(e)}",
+                "analyzed_at": datetime.now(timezone.utc).isoformat(),
+            }
+            analyzed.append(degraded_item)
+            continue
+        except CONTENT_EXCEPTIONS as e:
+            logger.warning("[parse_failed] %s: %s", item['title'], e)
             analyzed.append({
                 **item,
                 "summary": item.get("description", "")[:200],
@@ -139,10 +150,11 @@ URL: {item.get('url', '')}
 # ── Step 3: 整理 ──────────────────────────────────────────────
 def step_organize(items: list[dict], min_score: float = 0.6) -> list[dict]:
     """按 relevance_score 过滤 + URL 去重 + 标准格式"""
-    # 去重
     seen: set[str] = set()
     unique: list[dict] = []
     for item in items:
+        if item.get("status") == "degraded":
+            continue
         if item.get("relevance_score", 0) < min_score:
             continue
         url = item.get("url", "")
