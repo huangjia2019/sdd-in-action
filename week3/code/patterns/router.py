@@ -11,6 +11,7 @@ Router 是最常见的 Agent 设计模式之一：
 
 import json
 import os
+import urllib.parse
 import urllib.request
 from typing import Callable
 
@@ -28,9 +29,10 @@ def github_search_handler(query: str) -> str:
     if token:
         headers["Authorization"] = f"token {token}"
 
-    # 清理查询词
+    # 清理查询词 + URL 编码（处理空格、中文等）
     search_query = query.replace("搜索", "").replace("github", "").strip()
-    url = f"https://api.github.com/search/repositories?q={search_query}&sort=stars&per_page=5"
+    encoded_query = urllib.parse.quote(search_query)
+    url = f"https://api.github.com/search/repositories?q={encoded_query}&sort=stars&per_page=5"
 
     try:
         req = urllib.request.Request(url, headers=headers)

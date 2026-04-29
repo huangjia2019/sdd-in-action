@@ -174,3 +174,35 @@ class CostGuard:
 class BudgetExceededError(Exception):
     """预算超标异常 — 触发熔断"""
     pass
+
+
+# --- 测试入口 ---
+if __name__ == "__main__":
+    print("=== 测试 1：成本追踪 ===")
+    guard = CostGuard(budget_yuan=1.0)
+    guard.record("collect", {"prompt_tokens": 100, "completion_tokens": 50})
+    guard.record("analyze", {"prompt_tokens": 2000, "completion_tokens": 1000})
+    guard.record("review", {"prompt_tokens": 2500, "completion_tokens": 800})
+    report = guard.get_report()
+    print(f"  调用次数: {report['total_calls']}")
+    print(f"  总成本: ¥{report['total_cost_yuan']}")
+    print(f"  按节点: {report['cost_by_node']}")
+    result = guard.check()
+    print(f"  预算状态: {result['status']}\n")
+
+    print("=== 测试 2：预算超限 ===")
+    guard2 = CostGuard(budget_yuan=0.001)
+    guard2.record("analyze", {"prompt_tokens": 100000, "completion_tokens": 100000})
+    try:
+        guard2.check()
+        assert False, "应该抛出 BudgetExceededError！"
+    except BudgetExceededError as e:
+        print(f"  预算超限检测通过: {e}\n")
+
+    print("=== 测试 3：预警阈值 ===")
+    guard3 = CostGuard(budget_yuan=0.01, alert_threshold=0.5)
+    guard3.record("analyze", {"prompt_tokens": 5000, "completion_tokens": 2000})
+    result3 = guard3.check()
+    print(f"  预警状态: {result3['status']} — {result3['message']}\n")
+
+    print("所有测试通过！")

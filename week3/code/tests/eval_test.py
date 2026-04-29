@@ -14,11 +14,20 @@
 import json
 import os
 import sys
+import warnings
 
 import pytest
+from dotenv import load_dotenv
 
 # 将项目根目录加入路径
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, PROJECT_ROOT)
+
+# 加载 .env，让 pytest 能读到 LLM_API_KEY
+load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
+
+# 屏蔽 "Unknown pytest.mark.slow" 警告（slow 是我们自定义的慢速标记）
+warnings.filterwarnings("ignore", category=pytest.PytestUnknownMarkWarning)
 
 from tests.cost_guard import BudgetExceededError, CostGuard
 from tests.security import (

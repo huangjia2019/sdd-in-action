@@ -27,7 +27,7 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-from pipeline.model_client import chat, estimate_cost
+from pipeline.model_client import RetryExhaustedError, chat, estimate_cost
 
 logger = logging.getLogger(__name__)
 
@@ -60,14 +60,16 @@ def step_collect(limit: int = 20) -> list[dict]:
 
     items = []
     for repo in data.get("items", []):
-        items.append({
-            "source": "github",
-            "title": repo["full_name"],
-            "url": repo["html_url"],
-            "description": repo.get("description", "") or "",
-            "stars": repo.get("stargazers_count", 0),
-            "collected_at": datetime.now(timezone.utc).isoformat(),
-        })
+        items.append(
+            {
+                "source": "github",
+                "title": repo["full_name"],
+                "url": repo["html_url"],
+                "description": repo.get("description", "") or "",
+                "stars": repo.get("stargazers_count", 0),
+                "collected_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )
 
     RAW_DIR.mkdir(parents=True, exist_ok=True)
     today = datetime.now().strftime("%Y-%m-%d")
@@ -80,16 +82,16 @@ def step_collect(limit: int = 20) -> list[dict]:
 
 # ── Step 2: 分析 ──────────────────────────────────────────────
 def step_analyze(items: list[dict]) -> list[dict]:
-    """逐条 LLM 分析 · ⚠️ 无 retry · 第一个瞬时故障就整体 crash"""
+    """逐条 LLM 分析 · 带指数退避重试和降级处理"""
     analyzed: list[dict] = []
     total_cost = 0.0
 
     for i, item in enumerate(items, 1):
         prompt = f"""请分析以下技术项目，用 JSON 格式返回：
 
-项目: {item['title']}
-描述: {item.get('description', '')}
-URL: {item.get('url', '')}
+项目: {item["title"]}
+描述: {item.get("description", "")}
+URL: {item.get("url", "")}
 
 返回格式：
 {{
@@ -100,37 +102,90 @@ URL: {item.get('url', '')}
     "key_insight": "一句话洞察"
 }}"""
 
-        # ⚠️ 这里调 chat 会抛异常 · 没有 retry · 直接 propagate
-        #    pipeline 会在第 i 条挂掉 · 前 i-1 条的成本沉没
-        response = chat(prompt)
-        total_cost += estimate_cost(response.prompt_tokens, response.completion_tokens)
-
         try:
-            # 解析 LLM 返回的 JSON · 去掉 markdown 包裹
-            text = response.content.strip()
-            if text.startswith("```"):
-                text = "\n".join(text.split("\n")[1:-1])
-            analysis = json.loads(text)
-            analyzed.append({
-                **item,
-                **analysis,
-                "status": "ok",
-                "analyzed_at": datetime.now(timezone.utc).isoformat(),
-            })
-            print(f"[Analyze] {i}/{len(items)} · {item['title']}")
-        except json.JSONDecodeError as e:
-            # 内容层错误 · 降级默认值（但不 retry · 重试也是坏 JSON）
-            logger.warning("分析结果解析失败: %s - %s", item['title'], e)
-            analyzed.append({
-                **item,
-                "summary": item.get("description", "")[:200],
-                "tags": ["unknown"],
-                "relevance_score": 0.5,
-                "category": "unknown",
-                "key_insight": "",
-                "status": "parse_failed",
-                "analyzed_at": datetime.now(timezone.utc).isoformat(),
-            })
+            response = chat(prompt)
+            # 成功调用 · 累计成本（基于实际 tokens）
+            total_cost += estimate_cost(
+                response.prompt_tokens, response.completion_tokens
+            )
+            # 记录 API 调用次数（用于成本跟踪）
+            api_calls = response.api_calls
+            # 前 api_calls-1 次失败尝试的零 token 成本
+            for _ in range(api_calls - 1):
+                total_cost += estimate_cost(0, 0)  # 零 token 成本（仅计数）
+
+            try:
+                # 解析 LLM 返回的 JSON · 去掉 markdown 包裹
+                text = response.content.strip()
+                if text.startswith("```"):
+                    text = "\n".join(text.split("\n")[1:-1])
+                analysis = json.loads(text)
+                analyzed.append(
+                    {
+                        **item,
+                        **analysis,
+                        "status": "ok",
+                        "analyzed_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                )
+                print(
+                    f"[Analyze] {i}/{len(items)} · {item['title']} (尝试 {api_calls} 次)"
+                )
+            except json.JSONDecodeError as e:
+                # 内容层错误 · 降级默认值（但不 retry · 重试也是坏 JSON）
+                logger.warning("分析结果解析失败: %s - %s", item["title"], e)
+                analyzed.append(
+                    {
+                        **item,
+                        "summary": item.get("description", "")[:200],
+                        "tags": ["unknown"],
+                        "relevance_score": 0.5,
+                        "category": "unknown",
+                        "key_insight": "",
+                        "status": "parse_failed",
+                        "analyzed_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                )
+
+        except RetryExhaustedError as e:
+            # 重试耗尽 · 降级处理
+            logger.warning("重试耗尽: %s - %s", item["title"], e)
+            # 累计零 token 成本（每次 API 调用）
+            for _ in range(e.api_calls):
+                total_cost += estimate_cost(0, 0)
+            # 生成占位符摘要（空值）
+            analyzed.append(
+                {
+                    **item,
+                    "summary": "",
+                    "tags": [],
+                    "relevance_score": 0.0,
+                    "category": "",
+                    "key_insight": "",
+                    "status": "degraded",
+                    "analyzed_at": datetime.now(timezone.utc).isoformat(),
+                }
+            )
+            print(
+                f"[Analyze] {i}/{len(items)} · {item['title']} (降级，尝试 {e.api_calls} 次)"
+            )
+
+        except Exception as e:
+            # 其他未预期的异常（应极少发生）· 仍降级处理
+            logger.error("未预期异常: %s - %s", item["title"], e)
+            analyzed.append(
+                {
+                    **item,
+                    "summary": "",
+                    "tags": [],
+                    "relevance_score": 0.0,
+                    "category": "",
+                    "key_insight": "",
+                    "status": "error",
+                    "analyzed_at": datetime.now(timezone.utc).isoformat(),
+                }
+            )
+            print(f"[Analyze] {i}/{len(items)} · {item['title']} (错误)")
 
     print(f"[Analyze] 完成 {len(analyzed)} 条 · 成本 ¥{total_cost:.4f}")
     return analyzed
@@ -155,19 +210,21 @@ def step_organize(items: list[dict], min_score: float = 0.6) -> list[dict]:
     articles: list[dict] = []
     today = datetime.now().strftime("%Y-%m-%d")
     for i, item in enumerate(unique):
-        articles.append({
-            "id": f"{today}-{i:03d}",
-            "title": item["title"],
-            "url": item["url"],
-            "source": item.get("source", "github"),
-            "summary": item["summary"],
-            "tags": item["tags"],
-            "relevance_score": item["relevance_score"],
-            "category": item["category"],
-            "key_insight": item.get("key_insight", ""),
-            "collected_at": item["collected_at"],
-            "analyzed_at": item.get("analyzed_at", ""),
-        })
+        articles.append(
+            {
+                "id": f"{today}-{i:03d}",
+                "title": item["title"],
+                "url": item["url"],
+                "source": item.get("source", "github"),
+                "summary": item["summary"],
+                "tags": item["tags"],
+                "relevance_score": item["relevance_score"],
+                "category": item["category"],
+                "key_insight": item.get("key_insight", ""),
+                "collected_at": item["collected_at"],
+                "analyzed_at": item.get("analyzed_at", ""),
+            }
+        )
 
     print(f"[Organize] 过滤 + 去重后 {len(articles)} 条")
     return articles
@@ -187,7 +244,9 @@ def step_save(articles: list[dict]) -> None:
     existing_ids = {e["id"] for e in index}
     for a in articles:
         if a["id"] not in existing_ids:
-            index.append({"id": a["id"], "title": a["title"], "category": a["category"]})
+            index.append(
+                {"id": a["id"], "title": a["title"], "category": a["category"]}
+            )
     with open(index_path, "w", encoding="utf-8") as f:
         json.dump(index, f, ensure_ascii=False, indent=2)
 
@@ -196,15 +255,19 @@ def step_save(articles: list[dict]) -> None:
 
 # ── 主流程 ────────────────────────────────────────────────────
 def main():
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
+    )
 
-    parser = argparse.ArgumentParser(description="四步知识库流水线（基线版 · 无 retry）")
+    parser = argparse.ArgumentParser(
+        description="四步知识库流水线（基线版 · 无 retry）"
+    )
     parser.add_argument("--limit", type=int, default=20, help="采集上限")
     parser.add_argument("--min-score", type=float, default=0.6, help="相关性阈值")
     args = parser.parse_args()
 
     items = step_collect(limit=args.limit)
-    analyzed = step_analyze(items)            # ← 这里会因为瞬时故障 crash
+    analyzed = step_analyze(items)  # ← 这里会因为瞬时故障 crash
     articles = step_organize(analyzed, min_score=args.min_score)
     step_save(articles)
 
