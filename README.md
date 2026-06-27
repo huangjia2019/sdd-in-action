@@ -43,7 +43,6 @@
 - **书名**:《SDD 实战:规范驱动开发之道》
 - **作者**:黄佳(咖哥)
 - **出版社**:人民邮电出版社 · 异步图书
-- **页数**:224 页 / 7.125 印张
 - **京东**:即将上架
 - **当当**:即将上架
 - **豆瓣**:即将上架
@@ -83,12 +82,6 @@ sdd-in-action/
 | 第 6 章 | [`book-code/specs/tasks.md`](./book-code/specs/tasks.md) | 任务拆解 |
 | 第 7 章 | `book-code/src/` + `book-code/tests/`(随章节释出) | 执行验证 |
 | 第 8 章 | Agent 自动化流水线(随章节释出) | 模式应用 |
-
-### 📦 一键下载所有代码
-
-不想 git clone?直接下载打包好的 zip:
-
-→ **[`book-code-snippets.zip`](./book-code-snippets.zip)**
 
 ---
 
