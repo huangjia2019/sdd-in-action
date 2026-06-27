@@ -125,9 +125,3 @@ sdd-in-action/
 - 作者主页:[kage-ai.com](https://kage-ai.com/zh/)
 - 极客时间专栏:[Agent 设计模式之美](https://time.geekbang.org/column/intro/101162601) · [Claude Code 工程化实战](https://time.geekbang.org/column/intro/101113501)
 - 公众号:咖哥 AI
-
----
-
-## License
-
-MIT
