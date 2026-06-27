@@ -28,13 +28,11 @@
 
 ### 关于作者 · 黄佳(咖哥)
 
-新加坡科技研究局(A*STAR)资深 AI 研究员。畅销技术书作者。代表作三部曲,从基础理论到工程落地一脉相承:
+新加坡科技研究局(A*STAR)资深 AI 研究员。畅销技术书作者。
 
-- 《**GPT 图解:大模型是怎样构建的**》——国内 LLM 入门书口碑长青
-- 《**大模型应用开发:动手做 AI Agent**》——Agent 工程化中文圈启蒙读物
-- 《**Designing AI Agents**》——Manning 全球英文书,国际话语权之作
-
-《SDD 实战》是他从 Agent 设计模式延伸出的**工程方法论新作**——讲完 Agent 怎么设计,接着讲怎么把它工程化地交付出来。
+- 《**GPT 图解:大模型是怎样构建的**》
+- 《**大模型应用开发:动手做 AI Agent**》
+- 《**Designing AI Agents**》(Manning)
 
 <p align="center">
   <img src="./assets/sdd-cover-panoramic.jpg" alt="SDD 实战 · 封面 / 封底 / 作者介绍 / 同系列推荐" width="720">
