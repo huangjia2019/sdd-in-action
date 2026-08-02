@@ -1,21 +1,24 @@
 """
-LangGraph 工作流图定义 — V3 知识库：6 节点 + HumanFlag 终点
+LangGraph 工作流图定义 — V3 知识库：7 节点 + Metrics Collector + HumanFlag 终点
 
 【核心教学点：职责隔离的 Agent 协作】
 
 拓扑（和 PPT 完全一致）:
 
-    ① plan → ② collect → ③ analyze → ④ review ┬─[pass]────→ ⑥ organize → END
+    ① plan → ② collect → ③ analyze → ④ review ┬─[pass]────→ ⑥ organize → ⑧ flush_metrics → END
                                                 │
                                                 ├─[fail]────→ ⑤ revise → ④ review（循环）
                                                 │
-                                                └─[>max]────→ ⑦ human_flag → END
+                                                └─[>max]────→ ⑦ human_flag → ⑧ flush_metrics → END
 
 关键决策点（条件路由）:
 - review_passed == True   → 路由到 organize（整理入库，工作流正常终点）
 - review_passed == False
    - iteration < max      → 路由到 revise（LLM 定向修改后回到 review）
    - iteration >= max     → 路由到 human_flag（标记人工介入，工作流异常终点）
+
+⑧ Metrics Collector: 用 track_metrics decorator 透明包装每个节点记录指标，
+flush_metrics_node 在终点前将指标写入 knowledge/metrics/ 目录。
 """
 
 from langgraph.graph import END, StateGraph
@@ -23,6 +26,7 @@ from langgraph.graph import END, StateGraph
 from workflows.analyzer import analyze_node
 from workflows.collector import collect_node
 from workflows.human_flag import human_flag_node
+from workflows.metrics_collector import flush_metrics_node, track_metrics
 from workflows.organizer import organize_node
 from workflows.planner import planner_node
 from workflows.reviewer import review_node
@@ -60,14 +64,15 @@ def build_graph() -> StateGraph:
     """
     graph = StateGraph(KBState)
 
-    # --- 注册 6 + 1 个节点 ---
-    graph.add_node("plan", planner_node)
-    graph.add_node("collect", collect_node)
-    graph.add_node("analyze", analyze_node)
-    graph.add_node("review", review_node)
-    graph.add_node("revise", revise_node)
-    graph.add_node("organize", organize_node)
-    graph.add_node("human_flag", human_flag_node)
+    # --- 注册 7 + 1 个节点（每个节点用 track_metrics 包装，透明记录指标）---
+    graph.add_node("plan", track_metrics("plan")(planner_node))
+    graph.add_node("collect", track_metrics("collect")(collect_node))
+    graph.add_node("analyze", track_metrics("analyze")(analyze_node))
+    graph.add_node("review", track_metrics("review")(review_node))
+    graph.add_node("revise", track_metrics("revise")(revise_node))
+    graph.add_node("organize", track_metrics("organize")(organize_node))
+    graph.add_node("human_flag", track_metrics("human_flag")(human_flag_node))
+    graph.add_node("flush_metrics", flush_metrics_node)
 
     # --- 线性边: plan → collect → analyze → review ---
     graph.add_edge("plan", "collect")
@@ -88,9 +93,10 @@ def build_graph() -> StateGraph:
     # --- revise 修改后回到 review（形成循环） ---
     graph.add_edge("revise", "review")
 
-    # --- 两个终点 ---
-    graph.add_edge("organize", END)
-    graph.add_edge("human_flag", END)
+    # --- 两个终点（都经过 flush_metrics 写入指标后再 END）---
+    graph.add_edge("organize", "flush_metrics")
+    graph.add_edge("human_flag", "flush_metrics")
+    graph.add_edge("flush_metrics", END)
 
     # --- 入口 ---
     graph.set_entry_point("plan")
@@ -118,6 +124,7 @@ if __name__ == "__main__":
         "iteration": 0,
         "needs_human_review": False,
         "cost_tracker": {},
+        "metrics": [],
     }
 
     current_plan: dict = {}
@@ -127,6 +134,8 @@ if __name__ == "__main__":
         print(f"\n--- [{node_name}] 完成 ---")
 
         node_output = event[node_name]
+        if node_output is None:
+            continue
         if "plan" in node_output:
             current_plan = node_output["plan"] or {}
             print(f"  策略: {current_plan.get('strategy', '?')}")

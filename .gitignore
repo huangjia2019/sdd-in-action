@@ -13,3 +13,11 @@ build/
 
 # BMAD 本地用户配置
 _bmad/custom/config.user.toml
+
+# BMAD 安装产物 —— 由学员自行 `npx bmad-method install` 生成，不入库
+week3/code/.agents/
+week3/code/.claude/
+week3/code/_bmad/
+
+# 运行期产物 —— 目录保留，内容不入库
+week3/code/knowledge/**/*.json

@@ -9,7 +9,8 @@ V3 的 7 个节点函数已经拆成独立文件（一个 Agent 一个文件）�
     workflows/reviewer.py      → review_node     (质量审核 5 维加权，节点 ④)
     workflows/reviser.py       → revise_node     (定向修改，节点 ⑤)
     workflows/organizer.py     → organize_node   (整理入库，节点 ⑥ 正常终点)
-    workflows/human_flag.py    → human_flag_node (人工介入，节点 ⑦ 异常终点)
+    workflows/human_flag.py       → human_flag_node    (人工介入，节点 ⑦ 异常终点)
+    workflows/metrics_collector.py → track_metrics, flush_metrics_node (可观测指标，节点 ⑧)
 
 本文件保留只是为了向后兼容——老代码可能用 `from workflows.nodes import review_node`，
 新代码建议直接 import 对应文件（例如 `from workflows.reviewer import review_node`），
@@ -19,6 +20,7 @@ V3 的 7 个节点函数已经拆成独立文件（一个 Agent 一个文件）�
 from workflows.analyzer import analyze_node
 from workflows.collector import collect_node
 from workflows.human_flag import human_flag_node
+from workflows.metrics_collector import flush_metrics_node, track_metrics
 from workflows.organizer import organize_node
 from workflows.planner import plan_strategy, planner_node
 from workflows.reviewer import REVIEWER_PASS_THRESHOLD, REVIEWER_WEIGHTS, review_node
@@ -33,6 +35,8 @@ __all__ = [
     "revise_node",
     "organize_node",
     "human_flag_node",
+    "track_metrics",
+    "flush_metrics_node",
     "REVIEWER_WEIGHTS",
     "REVIEWER_PASS_THRESHOLD",
 ]

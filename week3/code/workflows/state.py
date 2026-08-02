@@ -27,6 +27,7 @@ class KBState(TypedDict):
         iteration: 当前审核循环次数（0 起算）
         needs_human_review: 超过 max_iterations 仍未通过时置 True（human_flag 终点标记）
         cost_tracker: Token 用量追踪，格式 {"prompt_tokens": int, "completion_tokens": int, "total_cost_yuan": float}
+        metrics: 每个节点的指标记录，格式 [{"node": str, "start_time": str, "end_time": str, "latency_ms": float, "status": str, "cost_snapshot": dict, "iteration": int}]
     """
 
     plan: dict
@@ -38,3 +39,4 @@ class KBState(TypedDict):
     iteration: int
     needs_human_review: bool
     cost_tracker: dict
+    metrics: list[dict]
